@@ -52,9 +52,10 @@ Flake.makeSegment = function(point1, point2) {
     };
 };
 
-Flake.makeTriangle = function(height, angle) {
-    var base = 2 * (Math.tan(angle / 2) * height),
-        points = [{ x: 0, y: 0 }, { x: height, y: base * 0.5 }, { x: height, y: -base * 0.5 }],
+Flake.makeTriangle = function(x, y, height, angle) {
+    var pivot = { x: x, y: y };
+        base = 2 * (Math.tan(angle / 2) * height),
+        points = [{ x: x, y: y }, { x: height + x, y: base * 0.5 + y }, { x: height + x, y: -base * 0.5 + y}],
         currentState = { points: points.slice(), next: null, prev: null };
 
     //test
@@ -66,9 +67,9 @@ Flake.makeTriangle = function(height, angle) {
     //end test
 
     function linesFromPoints(pts) {
-        var lines = [];
+        var i, lines = [];
 
-        for (var i = 0; i < pts.length - 1; i++) {
+        for (i = 0; i < pts.length - 1; i++) {
             lines.push(Flake.makeSegment(pts[i], pts[i + 1]));
         }
         lines.push(Flake.makeSegment(pts[pts.length - 1], pts[0]));
@@ -130,18 +131,20 @@ Flake.makeTriangle = function(height, angle) {
                  currentState = newState;
              },
 
-        display: function(x, y, ctx) {
+        display: function(ctx) {
                      ctx.fillStyle = 'rgb(' + Math.floor(Math.random() * 255) + ',' + Math.floor(Math.random() * 255) + ',' + Math.floor(Math.random() * 255) + ')';
-                     this.prepareStroke(x, y, ctx);
+                     this.prepareStroke(ctx);
                      ctx.fillStyle = '#ffffff';
                      ctx.fill();
                  },
 
         flip: function() {
                   var i;
+                  this.showPoints();
                   for (i = 0; i < points.length; i++) {
-                      points[i].y = -points[i].y;
+                      points[i].y = 2 * pivot.y - points[i].y;
                   }
+                  console.log(this.showPoints());
               },
 
         getDimensions: function() {
@@ -149,10 +152,10 @@ Flake.makeTriangle = function(height, angle) {
                               },
 
         showPoints: function() {
-                        console.log(JSON.stringify(points));
+                        return JSON.stringify(points);
                     },
 
-        prepareStroke: function(x, y, ctx) {
+        prepareStroke: function(ctx) {
                     var i;
                     ctx.beginPath(); 
                     ctx.moveTo(points[0].x + x, points[0].y + y);
@@ -169,10 +172,13 @@ Flake.makeTriangle = function(height, angle) {
                   }
               },
 
-        translate: function(x, y) {
-                       for (var i = 0; i < points.length; i++) {
-                           points[i].x += x;
-                           points[i].y += y;
+        translate: function(xMove, yMove) {
+                       var i;
+                       pivot.x += xMove;
+                       pivot.y += yMove;
+                       for (i = 0; i < points.length; i++) {
+                           points[i].x += xMove;
+                           points[i].y += yMove;
                        }
                    },
         
@@ -227,13 +233,14 @@ window.onload = function() {
         width = canvas.width,
         height = canvas.height,
         
-        triangle = Flake.makeTriangle(width * 0.9, 2 * Math.PI / 12),
+        triangle = Flake.makeTriangle(0, 0, width * 0.9, 2 * Math.PI / 12),
         foldedX = (width - triangle.getDimensions().x) / 2,
         foldedY = height / 2,
         
         cutHistory = [],
         cut = Flake.newCut();
 
+    triangle.translate(foldedX, foldedY);
     console.log(foldedX);
     console.log(foldedY);
     function undo() {
@@ -260,10 +267,13 @@ window.onload = function() {
     // end temp unfold stuff
    
     function updateUnfold() {
+        var i;
+
         unfoldContext.fillStyle = '#000000';
         unfoldContext.fillRect(-width * 2, -height * 2, width * 4, height * 4);
-        for (var i = 0; i < 12; i++) {
-            triangle.display(0, 0, unfoldContext);
+        triangle.translate(-foldedX, -foldedY);
+        for (i = 0; i < 12; i++) {
+            triangle.display(unfoldContext);
 
             // Adding a stroke ensures there is no blank space between sections
             unfoldContext.lineWidth = 2;
@@ -273,6 +283,7 @@ window.onload = function() {
             triangle.flip();
             unfoldContext.rotate(2 * Math.PI / 12);
         }
+        triangle.translate(foldedX, foldedY);
     } 
 
     function markCut(x, y) {
@@ -283,12 +294,12 @@ window.onload = function() {
     function resetDisplay() {
         ctx.fillStyle = '#061d2b'; 
         ctx.fillRect(0, 0, width, height);
-        triangle.display(foldedX, foldedY, ctx);
+        triangle.display(ctx);
         updateUnfold();
     }
 
     function triangleContains(x, y) {
-        triangle.prepareStroke(foldedX, foldedY, ctx);
+        triangle.prepareStroke(ctx);
         return ctx.isPointInPath(x, y);
     }
 
@@ -305,12 +316,12 @@ window.onload = function() {
         console.log(triangleContains(x, y));
         if (triangleContains(x, y)) {
             if (cut.isStarted()) {
-                cut.add({ x: x - foldedX, y: y - foldedY });
+                cut.add({ x: x, y: y });
                 markCut(x, y);
             }
         } else {
             if (cut.canFinish()) {
-                cut.add({ x: x - foldedX, y: y - foldedY });
+                cut.add({ x: x, y: y });
                 cutHistory.push(cut.getSnips());
                 console.log(JSON.stringify(cutHistory));
                 triangle.cut(cut.getSnips());
@@ -319,7 +330,7 @@ window.onload = function() {
             } else { 
                 cut = Flake.newCut();
                 resetDisplay();
-                cut.add({ x: x - foldedX, y: y - foldedY });
+                cut.add({ x: x, y: y });
                 markCut(x, y);
             }
         }
@@ -339,101 +350,3 @@ window.onload = function() {
     // end testing
 };
 
-/*
- oldCut: function(path) {
-                    // method of a "cuttable"
-
-             var oldCompositeOperation = ctx.globalCompositeOperation,
-                 i;
-
-                 ctx.globalCompositeOperation = 'destination-out';
-
-                 ctx.beginPath();
-                 ctx.moveTo(path[0].x, path[0].y);
-                 for (i = 1; i < path.length; i++) {
-                    ctx.lineTo(path[i].x, path[i].y); 
-                 }
-
-                 ctx.fillStyle = 'rgba(0, 0, 0, 1)';
-                 ctx.fill();
-
-                 ctx.globalCompositeOperation = oldCompositeOperation;
-             for (i = 0; i < path.length; i++) {
-                ctx.fillStyle = '#4444ff';
-                next = i + 1;
-                if (next >= path.length) next = 0;
-                current = { 
-                    point1: { x: path[i].x + translate.x, y: path[i].y + translate.y }, 
-                    point2: { x: path[next].x + translate.x, y: path[next].y + translate.y } 
-                };
-                intersections = triangle.getIntersections(current); 
-                for (var j = 0; j < intersections.length; j++) {
-                    if (intersections[j] != null) {
-                        ctx.fillRect(intersections[j].x - translate.x, intersections[j].y - translate.y, 5, 5); 
-                    }
-                }
-             }
-            }
- cut2: function(x, y) {
-                  // method of a cuttable
-                  var i, j,
-                    d = ctx.getImageData(0, 0, canvas.width, canvas.height).data,
-                    o = [],
-                    currentColumn = [];
-                  return;
-
-                  for (i = 0; i < canvas.width; i++) {
-                      for (j = 0; j < canvas.height; j++) {
-                          currentColumn.push([d[i * j * 4], d[i * j * 4 + 1], d[i * j * 4 + 2]]);
-                      }
-                      o.push(currentColumn);
-                      currentColumn = [];
-                  }
-              }
- getIntersections: function(line) {
-    //method of triangles
-                              var currentLine, intersection, intersections = [], next;
-                              for (var i = 0; i < points.length; i++) {
-                                  next = i + 1;
-                                  if (next >= points.length) {
-                                      next = 0;
-                                  }
-                                  currentLine = { point1: points[i], point2: points[next] };
-                                  intersection = intersect(line, currentLine);
-                                  intersections.push(intersect(line, currentLine));
-                              }
-                              return intersections;
-                          },
-
-            
-Flake.makeCuttable = function(triangle, translate) {
-    var canvas = document.createElement('canvas'),
-        ctx = canvas.getContext('2d'),
-        dims = triangle.getDimensions();
-
-    canvas.setAttribute('width', dims.x);
-    canvas.setAttribute('height', dims.y);
-
-    document.body.appendChild(canvas);
-
-    return {
-        cut: function(path) {
-                 triangle.cut(path);
-                 return;
-             },
-        display: function(x, y, drawCtx) {
-                     ctx.fillStyle = 'rgba(0, 0, 0, 0)'; 
-                     ctx.clearRect(0, 0, dims.x, dims.y);
-                     triangle.display(x + translate.x, y + translate.y, ctx);
-                     drawCtx.drawImage(canvas, x, y);
-                 },
-        contains: function(x, y) {
-                      x += translate.x;
-                      y += translate.y;
-                      return ctx.getImageData(x, y, 1, 1).data[3] > 0;
-                }, 
-   };
-};
-
-            
-            */
