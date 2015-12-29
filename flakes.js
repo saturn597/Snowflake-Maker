@@ -1,12 +1,11 @@
 var Flake = Flake || {};
 
 Flake.makeSegment = function(point1, point2) {
-    // Return an object representing the line segment from
-    // point1 to point2.
+    // return an object representing the line segment from point 1 to point 2
+    // "points' are objects containing an x and y coordinate
 
-    // Store the line as coefficients of the equation
-    // ax + by = c, and keep track of where the ends are 
-    // by storing the min and max x and y.
+    // store the line as coefficients of the equation ax + by = c
+    // knowing those coefficients helps us calculate intersections
 
     var a = point2.y - point1.y,
         b = point1.x - point2.x,
@@ -24,25 +23,36 @@ Flake.makeSegment = function(point1, point2) {
                          },
 
         getPoints: function() {
+                       // return the points used to make this line (the "ends" of the line)
                        // construct new point objects so callers won't be able to modify ours
+                       
                        return [ { x: point1.x, y: point1.y }, { x: point2.x, y: point2.y } ];
                    },
 
         inRange: function(pt) {
-                     // 0.01 is to allow tolerance for floating point issues
+                     // test whether an { x, y } pair has x and y values in between our two points
+                     // the "0.01" is to allow tolerance for floating point issues
+
                      return minX <= pt.x + 0.01 && pt.x - 0.01 <= maxX && minY <= pt.y + 0.01 && pt.y - 0.01 <= maxY;
         },
 
         intersection: function(line) {
+                          // find the intersection of this line segment with the segment passed as "line"
+                          // returns null if they don't intersect 
+                        
                           var coeffs = line.getCoefficients(), 
-                            det = a * coeffs.b - coeffs.a * b, result = null;
+                            det = a * coeffs.b - coeffs.a * b,
+                            result = null;
 
                           if (det !== 0) {
+                              // if determinant is 0, lines are parallel, otherwise can calculate an intersection
                               result = {
                                   x: (coeffs.b * c - b * coeffs.c) / det,
                                   y: (a * coeffs.c - coeffs.a * c) / det
                               };
                               if (!this.inRange(result) || !line.inRange(result)) {
+                                  // even if we were able to calculate an intersection, the line segments may not 
+                                  // "reach" each other
                                   result = null;
                               }
                           }
@@ -53,20 +63,23 @@ Flake.makeSegment = function(point1, point2) {
 };
 
 Flake.makeTriangle = function(x, y, height, angle) {
-    var pivot = { x: x, y: y };
-        base = 2 * (Math.tan(angle / 2) * height),
+    // a "triangle" is an object containing an array of points that describe some shape.
+    // the shape will initially be a trinagle. 
+    // the initial triangle will be isosceles, with a height of "height" and the angle at the vertex
+    // given by "angle", and with the vertex centered at (x, y).
+    // this triangle can be "cut" to yield a new shape.
+
+    var base = 2 * (Math.tan(angle / 2) * height),
         points = [{ x: x, y: y }, { x: height + x, y: base * 0.5 + y }, { x: height + x, y: -base * 0.5 + y}],
+
+        pivot = { x: x, y: y },  // when "flipped" the triangle will be flipped around this point
+
         currentState = { points: points.slice(), next: null, prev: null };
 
-    //test
-    pointt1 = { x: 586, y: -103 }
-    pointt2 = { x: 648, y: -89 };
-    getIntersection({ point1: pointt1, point2: pointt2 });
-    seg = Flake.makeSegment(pointt1, pointt2);
-    seg2 = Flake.makeSegment(points[1], points[2]);
-    //end test
-
     function linesFromPoints(pts) {
+        // our shape is represented by a series of points. this function converts it into a series of line segments
+        // that have a handy intersection method
+
         var i, lines = [];
 
         for (i = 0; i < pts.length - 1; i++) {
@@ -78,12 +91,16 @@ Flake.makeTriangle = function(x, y, height, angle) {
     }
 
     function pointsFromLines(lines) {
+        // this converts a series of line segments into a series of points.
+        
         return lines.map(function(line) { return line.getPoints()[0] });
     }
 
     function getIntersection(line) {
+        // given a line segment created by Flake.makeSegment, figure out where on the outside of our shape
+        // the segment intersects.
+    
         var i, intersection, lines = linesFromPoints(points);
-        line = Flake.makeSegment(line.point1, line.point2);
         for (i = 0; i < lines.length; i++) {
             intersection = line.intersection(lines[i]);
             if (intersection) {
@@ -95,13 +112,14 @@ Flake.makeTriangle = function(x, y, height, angle) {
     return {
         cut: function(cuts) {
                  var i, next, distance1, distance2, newPoints, newState,
-                 end1 = { point1: cuts[0], point2: cuts[1] }, 
-                 end2 = { point1: cuts[cuts.length - 2], point2: cuts[cuts.length - 1] },
+                 end1 = Flake.makeSegment(cuts[0], cuts[1]),
+                 end2 = Flake.makeSegment(cuts[cuts.length - 2], cuts[cuts.length - 1]),
                  
                  int1 = getIntersection(end1),
                  int2 = getIntersection(end2),
                  spliceStart = Math.min(int1.lineNumber, int2.lineNumber) + 1,
                  spliceLength = Math.abs(int1.lineNumber - int2.lineNumber);
+
                  console.log('int1 = ' + int1.lineNumber);
                  console.log('int2 = ' + int2.lineNumber);
                  cuts[0] = int1.intersection;
@@ -151,10 +169,6 @@ Flake.makeTriangle = function(x, y, height, angle) {
                                   return { x: height, y: base };
                               },
 
-        showPoints: function() {
-                        return JSON.stringify(points);
-                    },
-
         prepareStroke: function(ctx) {
                     var i;
                     ctx.beginPath(); 
@@ -171,6 +185,10 @@ Flake.makeTriangle = function(x, y, height, angle) {
                       points = currentState.points.slice();
                   }
               },
+
+        showPoints: function() {
+                        return JSON.stringify(points);
+                    },
 
         translate: function(xMove, yMove) {
                        var i;
@@ -241,8 +259,7 @@ window.onload = function() {
         cut = Flake.newCut();
 
     triangle.translate(foldedX, foldedY);
-    console.log(foldedX);
-    console.log(foldedY);
+
     function undo() {
         triangle.undo();
         resetDisplay();
