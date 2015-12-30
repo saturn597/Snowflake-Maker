@@ -1,11 +1,18 @@
 var Flake = Flake || {};
 
-Flake.makeSegment = function(point1, point2) {
-    // return an object representing the line segment from point 1 to point 2
-    // "points' are objects containing an x and y coordinate
+Flake.distance = function(point1, point2) {
+    // Given two "point" objects (each containing numerical "x" and "y" properties), return the
+    // Euclidean distance between them.
 
-    // store the line as coefficients of the equation ax + by = c
-    // knowing those coefficients helps us calculate intersections
+    return Math.sqrt(Math.pow(point1.x - point2.x, 2) + Math.pow(point1.y - point2.y, 2));    
+};
+
+Flake.makeSegment = function(point1, point2) {
+    // Return an object representing the line segment from point 1 to point 2
+    // "Points' are objects containing an x and y coordinate
+
+    // Store the line as coefficients of the equation ax + by = c.
+    // Knowing those coefficients helps us calculate intersections.
 
     var a = point2.y - point1.y,
         b = point1.x - point2.x,
@@ -23,36 +30,36 @@ Flake.makeSegment = function(point1, point2) {
                          },
 
         getPoints: function() {
-                       // return the points used to make this line (the "ends" of the line)
-                       // construct new point objects so callers won't be able to modify ours
+                       // Return the points used to make this line (the "ends" of the line).
+                       // Construct new point objects so callers won't be able to modify ours.
                        
                        return [ { x: point1.x, y: point1.y }, { x: point2.x, y: point2.y } ];
                    },
 
         inRange: function(pt) {
-                     // test whether an { x, y } pair has x and y values in between our two points
-                     // the "0.01" is to allow tolerance for floating point issues
+                     // Test whether an { x, y } pair has x and y values in between our two points.
+                     // The "0.01" is to allow tolerance for floating point issues.
 
                      return minX <= pt.x + 0.01 && pt.x - 0.01 <= maxX && minY <= pt.y + 0.01 && pt.y - 0.01 <= maxY;
         },
 
         intersection: function(line) {
-                          // find the intersection of this line segment with the segment passed as "line"
-                          // returns null if they don't intersect 
+                          // Find the intersection of this line segment with the segment passed as "line".
+                          // Returns null if they don't intersect .
                         
                           var coeffs = line.getCoefficients(), 
                             det = a * coeffs.b - coeffs.a * b,
                             result = null;
 
                           if (det !== 0) {
-                              // if determinant is 0, lines are parallel, otherwise can calculate an intersection
+                              // If determinant is 0, lines are parallel, otherwise can calculate an intersection.
                               result = {
                                   x: (coeffs.b * c - b * coeffs.c) / det,
                                   y: (a * coeffs.c - coeffs.a * c) / det
                               };
                               if (!this.inRange(result) || !line.inRange(result)) {
-                                  // even if we were able to calculate an intersection, the line segments may not 
-                                  // "reach" each other
+                                  // Even if we were able to calculate an intersection, the line segments may not 
+                                  // "reach" each other.
                                   result = null;
                               }
                           }
@@ -63,22 +70,26 @@ Flake.makeSegment = function(point1, point2) {
 };
 
 Flake.makeTriangle = function(x, y, height, angle) {
-    // a "triangle" is an object containing an array of points that describe some shape.
-    // the shape will initially be a trinagle. 
-    // the initial triangle will be isosceles, with a height of "height" and the angle at the vertex
+    // A "triangle" is an object containing an array of points that describe some shape.
+    // The shape will initially be a triangle. 
+    // The initial triangle will be isosceles, with a height of "height" and the angle at the vertex
     // given by "angle", and with the vertex centered at (x, y).
-    // this triangle can be "cut" to yield a new shape.
+    //
+    // The shape is displayed by stepping through the array of points, drawing a line from each point
+    // to the next. Then fill in the shape.
+    //
+    // This triangle can be "cut" to yield a new shape.
 
     var base = 2 * (Math.tan(angle / 2) * height),
         points = [{ x: x, y: y }, { x: height + x, y: base * 0.5 + y }, { x: height + x, y: -base * 0.5 + y}],
 
-        pivot = { x: x, y: y },  // when "flipped" the triangle will be flipped around this point
+        pivot = { x: x, y: y },  // when "flipped" the shape will be flipped around this point
 
         currentState = { points: points.slice(), next: null, prev: null };
 
     function linesFromPoints(pts) {
-        // our shape is represented by a series of points. this function converts it into a series of line segments
-        // that have a handy intersection method
+        // Convert a set of "points" into a series of line segments
+        // that have a handy intersection method.
 
         var i, lines = [];
 
@@ -91,13 +102,13 @@ Flake.makeTriangle = function(x, y, height, angle) {
     }
 
     function pointsFromLines(lines) {
-        // this converts a series of line segments into a series of points.
+        // Converts a series of line segments into a series of points.
         
         return lines.map(function(line) { return line.getPoints()[0] });
     }
 
     function getIntersection(line) {
-        // given a line segment created by Flake.makeSegment, figure out where on the outside of our shape
+        // Given a line segment created by Flake.makeSegment, figure out where on the outside of our shape
         // the segment intersects.
     
         var i, intersection, lines = linesFromPoints(points);
@@ -111,37 +122,63 @@ Flake.makeTriangle = function(x, y, height, angle) {
 
     return {
         cut: function(cuts) {
-                 var i, next, distance1, distance2, newPoints, newState,
-                 end1 = Flake.makeSegment(cuts[0], cuts[1]),
-                 end2 = Flake.makeSegment(cuts[cuts.length - 2], cuts[cuts.length - 1]),
-                 
-                 int1 = getIntersection(end1),
-                 int2 = getIntersection(end2),
-                 spliceStart = Math.min(int1.lineNumber, int2.lineNumber) + 1,
-                 spliceLength = Math.abs(int1.lineNumber - int2.lineNumber);
+                 // "Cuts" a piece from our current shape, yielding a new shape.
+                 // The "cuts" parameter is just an array of { x, y } points describing the shape of the cut.
+                 //
+                 // The "cuts" must intersect the exterior of our shape (according to "getIntersection") between the first
+                 // pair of points and between the last pair of points.
+                 //
+                 // To perform the "cut", we remove any points in our points array that are between the two intersection points.
+                 // And, with some adjustment, incorporate the points of the cut into our shape. Put them in between the two intersection 
+                 // points. By incorporating the points of the cut into our shape, we get a new shape that follows the outline of the cut.
+              
+                 var distances, i, next, newPoints, newState;
+                
+                 // find the intersections on both ends of the "cut"
+                 var intersections = [
+                         Flake.makeSegment(cuts[0], cuts[1]), 
+                         Flake.makeSegment(cuts[cuts.length - 2], cuts[cuts.length - 1])
+                    ].map(getIntersection); 
 
-                 console.log('int1 = ' + int1.lineNumber);
-                 console.log('int2 = ' + int2.lineNumber);
-                 cuts[0] = int1.intersection;
-                 cuts[cuts.length - 1] = int2.intersection;
-
-                 if (int2.lineNumber < int1.lineNumber) {
-                     cuts.reverse();
+                 if (!intersections[0] || !intersections[1]) {
+                     console.log('Cuts must intersect the shape on both ends.');
+                     return;
                  }
 
-                 if (int1.lineNumber === int2.lineNumber) {
-                     next = int1.lineNumber + 1;
+                 // We'll have to remove the parts of our shape that are between the two intersections, so figure out how many
+                 // elements of the points array we need to remove.
+                 var spliceStart = Math.min(intersections[0].lineNumber, intersections[1].lineNumber) + 1,
+                 spliceLength = Math.abs(intersections[0].lineNumber - intersections[1].lineNumber);
+
+                 // At first, part of the cut will extend outside of our shape. Remove that part of the cut, so that when we
+                 // add the cut's points, we aren't extending the shape but only cutting it.
+                 cuts[0] = intersections[0].intersection;
+                 cuts[cuts.length - 1] = intersections[1].intersection;
+
+                 // Make sure the cut flows in the right direction. Since the points in our shape have an order, we want the 
+                 // beginning of the cut to be at an earlier point of the shape, and the end of the cut to be later.
+                 // So reverse the cut if this isn't already the case.
+                 // We know the cut is going the wrong direction if the line number of the first intersection is greater
+                 // than that of the second. If the two line numbers are equal, then check whether the first point of the cut
+                 // is closer to an earlier point of the shape, and, if not, reverse the order of the cut.
+                 if (intersections[1].lineNumber < intersections[0].lineNumber) {
+                     cuts.reverse();
+                 } else if (intersections[0].lineNumber === intersections[1].lineNumber) {
+                     next = intersections[0].lineNumber + 1;
                      if (next >= points.length) {
                          next = 0;
                      }
-
-                     distance1 = Math.pow(cuts[0].x - points[int1.lineNumber].x, 2) + Math.pow(cuts[0].y - points[int1.lineNumber].y, 2);
-                     distance2 = Math.pow(cuts[cuts.length - 1].x - points[int1.lineNumber].x, 2) + Math.pow(cuts[cuts.length - 1].y - points[int1.lineNumber].y, 2);
                      
-                     if (distance1 > distance2) {
+                     distances = [
+                            Flake.distance(cuts[0], points[intersections[0].lineNumber]),
+                            Flake.distance(cuts[cuts.length - 1], points[intersections[0].lineNumber])
+                         ];
+                     
+                     if (distances[0] > distances[1]) {
                          cuts.reverse();
                      }
                  }
+
                  Array.prototype.splice.apply(points, [spliceStart, spliceLength].concat(cuts));
                  
                  newState = { prev: currentState, next: null, points: points.slice() };
