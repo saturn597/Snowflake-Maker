@@ -122,14 +122,14 @@ Flake.makeTriangle = function(x, y, height, angle) {
 
     return {
         cut: function(cuts) {
-                 // "Cuts" a piece from our current shape, yielding a new shape.
+                 // Cuts a piece from our current shape, yielding a new shape.
                  // The "cuts" parameter is just an array of { x, y } points describing the shape of the cut.
                  //
-                 // The "cuts" must intersect the exterior of our shape (according to "getIntersection") between the first
+                 // The cuts must intersect the exterior of our shape (according to "getIntersection") between the first
                  // pair of points and between the last pair of points.
                  //
-                 // To perform the "cut", we remove any points in our points array that are between the two intersection points.
-                 // And, with some adjustment, incorporate the points of the cut into our shape. Put them in between the two intersection 
+                 // To perform the cut, remove any points in our shape's points array that are between the two intersection points.
+                 // And, with some adjustment, incorporate the points of the cut into our shape, putting them in between the two intersection 
                  // points. By incorporating the points of the cut into our shape, we get a new shape that follows the outline of the cut.
               
                  var distances, i, next, newPoints, newState;
@@ -160,7 +160,7 @@ Flake.makeTriangle = function(x, y, height, angle) {
                  // So reverse the cut if this isn't already the case.
                  // We know the cut is going the wrong direction if the line number of the first intersection is greater
                  // than that of the second. If the two line numbers are equal, then check whether the first point of the cut
-                 // is closer to an earlier point of the shape, and, if not, reverse the order of the cut.
+                 // is closer to an earlier point of the shape. If not closer, reverse the order of the cut.
                  if (intersections[1].lineNumber < intersections[0].lineNumber) {
                      cuts.reverse();
                  } else if (intersections[0].lineNumber === intersections[1].lineNumber) {
@@ -178,45 +178,63 @@ Flake.makeTriangle = function(x, y, height, angle) {
                          cuts.reverse();
                      }
                  }
-
+   
+                 // Update the points array to reflect the cut 
                  Array.prototype.splice.apply(points, [spliceStart, spliceLength].concat(cuts));
                  
+                 // Store our current set of points, linking it to the previous "currentState"
                  newState = { prev: currentState, next: null, points: points.slice() };
                  currentState.next = newState;
                  currentState = newState;
              },
 
-        display: function(ctx) {
-                     ctx.fillStyle = 'rgb(' + Math.floor(Math.random() * 255) + ',' + Math.floor(Math.random() * 255) + ',' + Math.floor(Math.random() * 255) + ')';
+        display: function(ctx, color) {
+                     // Display this shape in the given graphics context, in a the given color
+                     
+                     var oldFillStyle = ctx.fillStyle;
                      this.prepareStroke(ctx);
-                     ctx.fillStyle = '#ffffff';
+                     ctx.fillStyle = color;
                      ctx.fill();
+                     ctx.fillStyle = oldFillStyle;
                  },
 
-        flip: function() {
-                  var i;
-                  this.showPoints();
-                  for (i = 0; i < points.length; i++) {
-                      points[i].y = 2 * pivot.y - points[i].y;
-                  }
-                  console.log(this.showPoints());
+        verticalFlip: function() {
+                          // Invert our shape vertically 
+                          // It's flipped around the y value of our "pivot" variable
+                          // This is helpful when turning the shape into a snowflake
+                          
+                          var i;
+                          this.showPoints();
+                          for (i = 0; i < points.length; i++) {
+                              points[i].y = 2 * pivot.y - points[i].y;
+                          }
               },
 
         getDimensions: function() {
-                                  return { x: height, y: base };
-                              },
+                           // Get the dimensions of our original triangle (not necessarily
+                           // the current bounds of the shape). 
+
+                           return { x: height, y: base };
+                       },
 
         prepareStroke: function(ctx) {
-                    var i;
-                    ctx.beginPath(); 
-                    ctx.moveTo(points[0].x + x, points[0].y + y);
-                    for (i = 1; i < points.length; i++) {
-                        ctx.lineTo(points[i].x + x, points[i].y + y);
-                    }
-                    ctx.closePath();
+                           // Begin a path within the given canvas context and lay down
+                           // lines following the path between the points in our shape,
+                           // but without actually *drawing* the lines.
+
+                           var i;
+                           ctx.beginPath(); 
+                           ctx.moveTo(points[0].x + x, points[0].y + y);
+                           for (i = 1; i < points.length; i++) {
+                               ctx.lineTo(points[i].x + x, points[i].y + y);
+                           }
+                           ctx.closePath();
                 },
 
         redo: function() {
+                  // Advance to the next state in our states list. This is what happens if
+                  // a user clicks "redo." See also "undo."
+                  
                   if (currentState.next) {
                       currentState = currentState.next;
                       points = currentState.points.slice();
@@ -224,10 +242,14 @@ Flake.makeTriangle = function(x, y, height, angle) {
               },
 
         showPoints: function() {
+                        // For debugging convenience.
                         return JSON.stringify(points);
                     },
 
         translate: function(xMove, yMove) {
+                       // Move the shape around. The shape will move up by the number of pixels 
+                       // given by "yMove" and right by "xMove."
+                       
                        var i;
                        pivot.x += xMove;
                        pivot.y += yMove;
@@ -238,6 +260,9 @@ Flake.makeTriangle = function(x, y, height, angle) {
                    },
         
         undo: function() {
+                  // Undo the most recent cut by setting the points array to whatever it was before the
+                  // cut.
+
                   if (currentState.prev) {
                       currentState = currentState.prev;
                       points = currentState.points.slice();
@@ -247,7 +272,10 @@ Flake.makeTriangle = function(x, y, height, angle) {
 };
 
 Flake.newCut = function() {
-    var snips = [];
+    // Return an object representing a new "cut." Each cut consists of zero or more "snips," 
+    // or straight-line segments representing the shape of the cut.
+
+    var snips = [];  
     return {
         canFinish: function() {
                        return snips.length > 1;
@@ -327,14 +355,14 @@ window.onload = function() {
         unfoldContext.fillRect(-width * 2, -height * 2, width * 4, height * 4);
         triangle.translate(-foldedX, -foldedY);
         for (i = 0; i < 12; i++) {
-            triangle.display(unfoldContext);
+            triangle.display(unfoldContext, '#ffffff');
 
             // Adding a stroke ensures there is no blank space between sections
             unfoldContext.lineWidth = 2;
             unfoldContext.strokeStyle = '#ffffff';
             unfoldContext.stroke();  
 
-            triangle.flip();
+            triangle.verticalFlip();
             unfoldContext.rotate(2 * Math.PI / 12);
         }
         triangle.translate(foldedX, foldedY);
@@ -348,7 +376,7 @@ window.onload = function() {
     function resetDisplay() {
         ctx.fillStyle = '#061d2b'; 
         ctx.fillRect(0, 0, width, height);
-        triangle.display(ctx);
+        triangle.display(ctx, '#ffffff');
         updateUnfold();
     }
 
