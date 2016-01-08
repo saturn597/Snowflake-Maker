@@ -8,6 +8,10 @@ h1 {
     font-size: 4em;
 }
 
+canvas {
+    border: 1px #f00 solid;
+}
+
 #wrapper {
     border: 1px #aaa dotted;
     border-radius: 15px;
@@ -19,9 +23,8 @@ h1 {
     height: 500px;
 }
 
-/* From http://css3buttongenerator.com/ */
-
-.btn {
+button {
+    /* From http://css3buttongenerator.com/ */
     background: #6e90ff;
     background-image: -webkit-linear-gradient(top, #6e90ff, #061d2b);
     background-image: -moz-linear-gradient(top, #6e90ff, #061d2b);
@@ -29,6 +32,7 @@ h1 {
     background-image: -o-linear-gradient(top, #6e90ff, #061d2b);
     background-image: linear-gradient(to bottom, #6e90ff, #061d2b);
 
+    border-style: none;
     -webkit-border-radius: 42;
     -moz-border-radius: 42;
     border-radius: 42px;
@@ -40,7 +44,7 @@ h1 {
 
 }
 
-.btn:hover {
+button:hover {
     background: #061d2b;
 }
 

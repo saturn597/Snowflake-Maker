@@ -7,6 +7,22 @@ Flake.distance = function(point1, point2) {
     return Math.sqrt(Math.pow(point1.x - point2.x, 2) + Math.pow(point1.y - point2.y, 2));    
 };
 
+Flake.linesFromPoints = function(pts, close) {
+    // Convert a set of "points" into a series of line segments
+    // that have a handy intersection method.
+    var i, lines = [];
+
+    for (i = 0; i < pts.length - 1; i++) {
+        lines.push(Flake.makeSegment(pts[i], pts[i + 1]));
+    }
+
+    if (close) {
+        lines.push(Flake.makeSegment(pts[pts.length - 1], pts[0]));
+    }
+
+    return lines;
+};
+
 Flake.makeSegment = function(point1, point2) {
     // Return an object representing the line segment from point 1 to point 2
     // "Points' are objects containing an x and y coordinate
@@ -45,7 +61,7 @@ Flake.makeSegment = function(point1, point2) {
 
         intersection: function(line) {
                           // Find the intersection of this line segment with the segment passed as "line".
-                          // Returns null if they don't intersect .
+                          // Returns null if they don't intersect.
                         
                           var coeffs = line.getCoefficients(), 
                             det = a * coeffs.b - coeffs.a * b,
@@ -69,49 +85,41 @@ Flake.makeSegment = function(point1, point2) {
     };
 };
 
-Flake.makeTriangle = function(x, y, height, angle) {
-    // A "triangle" is an object containing an array of points that describe some shape.
-    // The shape will initially be a triangle. 
-    // The initial triangle will be isosceles, with a height of "height" and the angle at the vertex
-    // given by "angle", and with the vertex centered at (x, y).
+Flake.makeFolded = function(x, y, height, angle) {
+    // A "folded" is an object containing an array of points that describe some shape. It is intended
+    // to represent a piece of paper that has been folded as part of the process of making a "snowflake."
     //
-    // The shape is displayed by stepping through the array of points, drawing a line from each point
-    // to the next. Then fill in the shape.
+    // The shape will initially be an isosceles triangle (consistent with a typical folded snowflake).
     //
-    // This triangle can be "cut" to yield a new shape.
+    // The initial triangle will have a height of "height" and the angle at the vertex
+    // given by "angle", and with the vertex centered at (x, y). (Vertex = the intersection of the two
+    // equal sides).
+    //
+    // The typical angle for a folded snowflake will be pi / 6 radians (30 degrees).
+    //
+    // This shape can be "cut" to yield a new shape, using the cut method.
+    //
+    // We can display the "folded" shape using the "display" method. This works by stepping through the 
+    // array of points, drawing a line from each point to the next. Then fill in the shape.
+    //
+    // At any given time, the folded shape can also be displayed in "unfolded" form, as if we had finished cutting
+    // unfolded it to see the snowflake we had made. This is done using the "displayUnfolded" method. 
 
     var base = 2 * (Math.tan(angle / 2) * height),
-        points = [{ x: x, y: y }, { x: height + x, y: base * 0.5 + y }, { x: height + x, y: -base * 0.5 + y}],
+        points = [{ x: x - height / 2, y: y }, { x: x + height / 2, y: base * 0.5 + y }, { x: x + height / 2, y: -base * 0.5 + y}],
 
-        pivot = { x: x, y: y },  // when "flipped" the shape will be flipped around this point
+        pivot = { x: x - height / 2, y: y },  // when "flipped" the shape will be flipped around this point
+        originalVertex = { x: points[0].x, y: points[0].y },
+
+
 
         currentState = { points: points.slice(), next: null, prev: null };
 
-    function linesFromPoints(pts) {
-        // Convert a set of "points" into a series of line segments
-        // that have a handy intersection method.
-
-        var i, lines = [];
-
-        for (i = 0; i < pts.length - 1; i++) {
-            lines.push(Flake.makeSegment(pts[i], pts[i + 1]));
-        }
-        lines.push(Flake.makeSegment(pts[pts.length - 1], pts[0]));
-
-        return lines;
-    }
-
-    function pointsFromLines(lines) {
-        // Converts a series of line segments into a series of points.
-        
-        return lines.map(function(line) { return line.getPoints()[0] });
-    }
-
     function getIntersection(line) {
-        // Given a line segment created by Flake.makeSegment, figure out where on the outside of our shape
-        // the segment intersects.
+        // Given a line segment created by Flake.makeSegment, find a point where it intersects the exterior of our shape,
+        // if one exists. (Note - only returns one intersection point).
     
-        var i, intersection, lines = linesFromPoints(points);
+        var i, intersection, lines = Flake.linesFromPoints(points, true);
         for (i = 0; i < lines.length; i++) {
             intersection = line.intersection(lines[i]);
             if (intersection) {
@@ -120,7 +128,7 @@ Flake.makeTriangle = function(x, y, height, angle) {
         }
     }
 
-    return {
+   return {
         cut: function(cuts) {
                  // Cuts a piece from our current shape, yielding a new shape.
                  // The "cuts" parameter is just an array of { x, y } points describing the shape of the cut.
@@ -135,11 +143,9 @@ Flake.makeTriangle = function(x, y, height, angle) {
                  var distances, i, next, newPoints, newState;
                 
                  // find the intersections on both ends of the "cut"
-                 var intersections = [
-                         Flake.makeSegment(cuts[0], cuts[1]), 
-                         Flake.makeSegment(cuts[cuts.length - 2], cuts[cuts.length - 1])
-                    ].map(getIntersection); 
-
+                 var cutLines = Flake.linesFromPoints(cuts), 
+                     intersections = [ cutLines[0], cutLines[cutLines.length - 1] ].map(getIntersection);
+                 
                  if (!intersections[0] || !intersections[1]) {
                      console.log('Cuts must intersect the shape on both ends.');
                      return;
@@ -188,31 +194,76 @@ Flake.makeTriangle = function(x, y, height, angle) {
                  currentState = newState;
              },
 
-        display: function(ctx, color) {
-                     // Display this shape in the given graphics context, in a the given color
+        display: function(ctx, style) {
+                     // Display this shape in the given graphics context, in the given style
                      
                      var oldFillStyle = ctx.fillStyle;
                      this.prepareStroke(ctx);
-                     ctx.fillStyle = color;
+                     ctx.fillStyle = style;
                      ctx.fill();
                      ctx.fillStyle = oldFillStyle;
                  },
 
-        verticalFlip: function() {
-                          // Invert our shape vertically 
-                          // It's flipped around the y value of our "pivot" variable
-                          // This is helpful when turning the shape into a snowflake
-                          
-                          var i;
-                          this.showPoints();
-                          for (i = 0; i < points.length; i++) {
-                              points[i].y = 2 * pivot.y - points[i].y;
-                          }
-              },
+        displayUnfolded: function(x, y, ctx, style, strokeWidth) {
+                             // Display this shape in its "unfolded" form.
+                             //
+                             // To draw the snowflake unfolded, start by drawing the folded shape once. The vertex point marks 
+                             // the center of the unfolded snowflake.
+                             //
+                             // Now draw the folded shape again, but rotated around the vertex point by the vertex angle (so that, if it 
+                             // were still the original triangle, its edges would just line up with the first folded shape we drew). 
+                             // Also, flip the shape so that it's a mirror image of the original.
+                             //
+                             // Repeat this process until we have rotated in a complete circle, "flipping" the shape each time.
+                             //
+                             // Given a vertex angle of 30 degrees, this will result in a snowflake with 6-fold radial symmetry, like
+                             // an actual snowflake.
+                             
+
+                             var i;
+
+                             // Calculate the number of times we'll have to draw the folded shape to make a complete circle.
+                             var numSections = 2 * Math.PI / angle;
+
+                             var oldStrokeStyle = ctx.strokeStyle,
+                                 oldLineWidth = ctx.lineWidth;
+
+                             ctx.strokeStyle = style;
+                             ctx.lineWidth = strokeWidth;
+                            
+
+                             // Temporarily move our coordinates so that the vertex is at (0, 0).
+                             // Canvas rotations always center on the origin, so this is easier.
+                             this.translate(-originalVertex.x, -originalVertex.y);
+
+                             // move the canvas so that the snowflake is centered where the caller asked
+                             ctx.translate(x, y);
+
+                             for (i = 0; i < numSections; i++) {
+                                 this.display(ctx, style);
+
+                                 // Adding a stroke ensures there is no blank space between sections
+                                 ctx.lineWidth = strokeWidth;
+                                 ctx.stroke();  
+
+                                 this.verticalFlip();
+                                 ctx.rotate(angle);
+                             }
+                             this.translate(originalVertex.x, originalVertex.y);
+
+                             ctx.translate(-x, -y);
+
+                             ctx.strokeStyle = oldStrokeStyle;
+                             ctx.lineWidth = oldLineWidth;
+                         },
 
         getDimensions: function() {
-                           // Get the dimensions of our original triangle (not necessarily
-                           // the current bounds of the shape). 
+                           // Get the bounds of our original triangle shape.
+                           //
+                           // This is the width and height of the smallest box that would contain
+                           // that shape.
+                           //
+                           // This is not necessarily the bounds of the current shape. 
 
                            return { x: height, y: base };
                        },
@@ -224,9 +275,9 @@ Flake.makeTriangle = function(x, y, height, angle) {
 
                            var i;
                            ctx.beginPath(); 
-                           ctx.moveTo(points[0].x + x, points[0].y + y);
+                           ctx.moveTo(points[0].x, points[0].y);
                            for (i = 1; i < points.length; i++) {
-                               ctx.lineTo(points[i].x + x, points[i].y + y);
+                               ctx.lineTo(points[i].x, points[i].y);
                            }
                            ctx.closePath();
                 },
@@ -267,125 +318,135 @@ Flake.makeTriangle = function(x, y, height, angle) {
                       currentState = currentState.prev;
                       points = currentState.points.slice();
                   }
+              },
+
+        verticalFlip: function() {
+                          // Invert our shape vertically 
+                          // It's flipped around the y value of our "pivot" variable
+                          // This is helpful when turning the shape into a snowflake
+                          
+                          var i;
+                          for (i = 0; i < points.length; i++) {
+                              points[i].y = 2 * pivot.y - points[i].y;
+                          }
               }
     };
 };
 
 Flake.newCut = function() {
-    // Return an object representing a new "cut." Each cut consists of zero or more "snips," 
-    // or straight-line segments representing the shape of the cut.
+    // Return an object representing a new "cut." Each cut consists of zero or more
+    // { x, y } point objects that describe the shape of the cut.
 
-    var snips = [];  
+    var points = [];  
     return {
-        canFinish: function() {
-                       return snips.length > 1;
-                   },
-        getSnips: function() {
-                      return snips.slice(); 
-                  },
         add: function(cut) {
-                      console.log(cut);
-                      snips.push(cut);
+                 // Add a point to the cut
+                 points.push(cut);
+             },
+        canFinish: function() {
+                       // Is cut a "complete" cut? Can't cut out only a single point
+                       return points.length > 1;
+                   },
+        getPoints: function() {
+                       // Return a copy of the points describing the shape of the cut.
+                       return points.slice();
                   },
         isStarted: function() {
-                        return snips.length > 0;
+                       // Have we started, i.e., added at least one point?
+                       return points.length > 0;
                    },
-        updateMark: function(ctx) {
-                        var topSnip = snips[snips.length - 1], prevSnip;
-                        ctx.fillStyle = '#ff0000';
-                        ctx.fillRect(topSnip.x - 1, topSnip.y - 1, 2, 2);
+        display: function(ctx, pointStyle, lineStyle) {
+                     // Display the cut in the given context.
+                     // Each point in our cut will be displayed using "pointStyle" and the lines
+                     // in between using "lineStyle."
+                    
+                     if (points.length === 0) {
+                         return;
+                     }
 
-                        if (snips.length > 1) {
-                           prevSnip = snips[snips.length - 2]; 
-                           ctx.beginPath();
-                           ctx.moveTo(prevSnip.x, prevSnip.y);
-                           ctx.lineTo(topSnip.x, topSnip.y);
-                           ctx.stroke();
-                        }
-                    }
+                     var prevSnip, i;
+                     var oldStroke = ctx.strokeStyle;
+                     var oldLine = ctx.lineStyle;
+                     var topSnip = points[points.length - 1];
+
+                     ctx.fillStyle = pointStyle;
+                     ctx.strokeStyle = lineStyle;
+
+                     ctx.beginPath();
+                     ctx.moveTo(points[0].x, points[0].y);
+
+                     for (i = 0; i < points.length; i++) {
+                         ctx.fillRect(points[i].x - 1, points[i].y - 1, 2, 2);
+                         ctx.lineTo(points[i].x, points[i].y);
+                     }
+
+                     ctx.stroke();
+                 }
     };
 };
 
-window.onload = function() {
-    
-    var canvas = document.getElementsByTagName('canvas')[0],
+Flake.startUI= function() {
+    var bgColor = '#061d2b',
+        flakeColor = '#ffffff';
+
+    var cutLineColor = '#ff0000',
+        cutPointColor = '#00ff00';
+
+    var canvas = document.getElementById('folded'),
+        unfoldCanvas = document.getElementById('unfolded'),
         undoButton = document.getElementById('undo'),
-        redoButton = document.getElementById('redo'),
-        unfoldCanvas = document.createElement('canvas'),
-        ctx = canvas.getContext('2d'),
-        width = canvas.width,
-        height = canvas.height,
-        
-        triangle = Flake.makeTriangle(0, 0, width * 0.9, 2 * Math.PI / 12),
-        foldedX = (width - triangle.getDimensions().x) / 2,
-        foldedY = height / 2,
-        
-        cutHistory = [],
+        redoButton = document.getElementById('redo');
+ 
+    var ctx = canvas.getContext('2d'),
+        unfoldCtx = unfoldCanvas.getContext('2d');
+
+    var folded = Flake.makeFolded(canvas.width / 2, canvas.height / 2, canvas.width * 0.9, 2 * Math.PI / 12),
         cut = Flake.newCut();
 
-    triangle.translate(foldedX, foldedY);
+    // Scale the unfold canvas - it should have enough space to contain the folded flake, oriented any direction, twice (since the unfolded
+    // snowflake will have a max width twice the folded snowflake's height), and add about 10% so it has some space on either side.
+    var scaleFactor = Math.min(unfoldCanvas.width, unfoldCanvas.height) / Math.max(folded.getDimensions().x, folded.getDimensions().y) / 2 / 1.1;
+    unfoldCtx.scale(scaleFactor, scaleFactor);
 
-    function undo() {
-        triangle.undo();
-        resetDisplay();
-    }
-    undoButton.onclick = undo;
-
-    function redo() {
-        triangle.redo();
-        resetDisplay();
-    }
-    redoButton.onclick = redo;
-
-    // temp unfold stuff
-    var unfoldCanvas = document.createElement('canvas'),
-        unfoldContext = unfoldCanvas.getContext('2d');
-    unfoldCanvas.setAttribute('width', width);
-    unfoldCanvas.setAttribute('height', width);
-    document.body.appendChild(unfoldCanvas);
-    unfoldContext.scale(1/2, 1/2);
-    unfoldContext.translate(width, width);
+    // calculate the center of the new scaled canvas so we can center the snowflake there
+    var unfoldCtr = { x: unfoldCanvas.width / 2 / scaleFactor, y: unfoldCanvas.height / 2 / scaleFactor };
     
-    // end temp unfold stuff
-   
-    function updateUnfold() {
-        var i;
+    var fudgeStrokeWidth = 2 / scaleFactor;
 
-        unfoldContext.fillStyle = '#000000';
-        unfoldContext.fillRect(-width * 2, -height * 2, width * 4, height * 4);
-        triangle.translate(-foldedX, -foldedY);
-        for (i = 0; i < 12; i++) {
-            triangle.display(unfoldContext, '#ffffff');
+    function redraw() {
+        ctx.fillStyle = bgColor; 
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        folded.display(ctx, flakeColor);
 
-            // Adding a stroke ensures there is no blank space between sections
-            unfoldContext.lineWidth = 2;
-            unfoldContext.strokeStyle = '#ffffff';
-            unfoldContext.stroke();  
+        unfoldCtx.fillStyle = bgColor;
+        unfoldCtx.fillRect(-unfoldCanvas.width / scaleFactor, -unfoldCanvas.height / scaleFactor, unfoldCanvas.width / scaleFactor * 2, unfoldCanvas.height / scaleFactor * 2);
 
-            triangle.verticalFlip();
-            unfoldContext.rotate(2 * Math.PI / 12);
-        }
-        triangle.translate(foldedX, foldedY);
-    } 
+        // fudgeStrokeWidth makes sure the stroke around the snowflake is about 2 pixels wide when drawn on our scaled canvas
+        folded.displayUnfolded(unfoldCtr.x, unfoldCtr.y, unfoldCtx, flakeColor, fudgeStrokeWidth);
 
-    function markCut(x, y) {
-        ctx.fillStyle = '#ff0000';
-        ctx.fillRect(x - 1, y - 1, 2, 2);
+        cut.display(ctx, cutPointColor, cutLineColor); 
     }
 
-    function resetDisplay() {
-        ctx.fillStyle = '#061d2b'; 
-        ctx.fillRect(0, 0, width, height);
-        triangle.display(ctx, '#ffffff');
-        updateUnfold();
-    }
-
-    function triangleContains(x, y) {
-        triangle.prepareStroke(ctx);
+    function foldedContains(x, y) {
+        folded.prepareStroke(ctx);
         return ctx.isPointInPath(x, y);
     }
 
-    resetDisplay();
+    undoButton.onclick = function() {
+        if (cut.isStarted()) {
+            cut = Flake.newCut();
+        } else {
+            folded.undo();
+        }
+        redraw();
+    };
+
+    redoButton.onclick = function() {
+        folded.redo();
+        redraw();
+    };
+
+    redraw();
 
     canvas.addEventListener('mousedown', function(e) {
         var x = 0, y = 0;
@@ -393,42 +454,29 @@ window.onload = function() {
             x += e.offsetX;
             y += e.offsetY;
         } while (e = e.offsetParent);
-        console.log(triangle.showPoints());
-    
-        console.log(triangleContains(x, y));
-        if (triangleContains(x, y)) {
+
+        if (foldedContains(x, y)) {
             if (cut.isStarted()) {
                 cut.add({ x: x, y: y });
-                markCut(x, y);
+                redraw();
             }
         } else {
             if (cut.canFinish()) {
                 cut.add({ x: x, y: y });
-                cutHistory.push(cut.getSnips());
-                console.log(JSON.stringify(cutHistory));
-                triangle.cut(cut.getSnips());
+                folded.cut(cut.getPoints());
                 cut = Flake.newCut();
-                resetDisplay();
+                redraw();
             } else { 
                 cut = Flake.newCut();
-                resetDisplay();
                 cut.add({ x: x, y: y });
-                markCut(x, y);
+                redraw();
             }
         }
 
     });
+};
 
-
-    // For testing
-    return;
-    cuts = [[{"x":644,"y":47},{"x":474,"y":59},{"x":641,"y":142}],[{"x":639,"y":29},{"x":401,"y":-50},{"x":639,"y":-100}]];
-    for (var i = 0; i < cuts.length; i++) {
-        triangle.cut(cuts[i]);
-        console.log('cut made');
-        triangle.showPoints();
-    }
-    resetDisplay();
-    // end testing
+window.onload = function() {
+    Flake.startUI();
 };
 
