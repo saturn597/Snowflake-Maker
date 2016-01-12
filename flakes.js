@@ -8,8 +8,9 @@ Flake.distance = function(point1, point2) {
 };
 
 Flake.linesFromPoints = function(pts, close) {
-    // Convert a set of "points" into a series of line segments
-    // that have a handy intersection method.
+    // Convert a set of "points" into a series of line segments that have a handy intersection method.
+    //
+    // If "close" is true, assume the last point is connected to the first, so that we have a closed shape.
 
     var i, lines = [];
 
@@ -25,7 +26,8 @@ Flake.linesFromPoints = function(pts, close) {
 };
 
 Flake.getIntersections = function(pts, segment, close) {
-    // Given a line segment created by Flake.makeSegment, find all points where it intersects the exterior of our shape.
+    // Given a line segment created by Flake.makeSegment, find all points where it intersects the exterior of the shape
+    // outlined by "pts." If "close" is true, assume the last point in pts is connected to the first, so that we have a closed shape.
     //
     // Returns an array of objects, each of which contains the attributes "lineNumber" and "intersection."
     //
@@ -44,11 +46,29 @@ Flake.getIntersections = function(pts, segment, close) {
 
 Flake.getIntersection = function(pts, segment, close) {
     // Given a line segment created by Flake.makeSegment, find one point where it intersects the exterior of our shape.
+    //
+    // If "close" is true, assume the last point in pts is connected to the first, so that we have a closed shape.
 
     var result = Flake.getIntersections(pts, segment, close);
     if (result.length > 0) {
         return result[0];
     }
+};
+
+Flake.getPerimeter = function(pts, close) {
+    // Given a shape defined by points "pts", calculate the total distance between each point and its neighbors.
+    //
+    // If "close" is true, assume the last point in pts is connected to the first, so that we have a closed shape.
+    //
+    // This is the perimeter around a closed shape.
+
+    return Flake.linesFromPoints(pts, close).
+        map(function(line) {
+            return line.getLength();
+        }).
+        reduce (function(a, b) {
+            return a + b;
+        });
 };
 
 Flake.makeSegment = function(point1, point2) {
@@ -68,10 +88,13 @@ Flake.makeSegment = function(point1, point2) {
         maxY = Math.max(point1.y, point2.y);
 
     return {
-
         getCoefficients: function() {
                              return { a: a, b: b, c: c };
                          },
+
+        getLength: function() {
+                    return Flake.distance(point1, point2);
+                },
 
         getPoints: function() {
                        // Return the points used to make this line (the "ends" of the line).
@@ -143,6 +166,9 @@ Flake.makeFolded = function(x, y, height, angle) {
 
    return {
         countIntersections: function(pts) {
+                                // Given an unclosed shape outlined by points "pts", return the number
+                                // of times it intersects the shape of this folded object.
+
                                 var i, total = 0;
                                 var lines = Flake.linesFromPoints(pts);
 
@@ -160,13 +186,16 @@ Flake.makeFolded = function(x, y, height, angle) {
                  // The cuts must intersect the exterior of our shape (according to "getIntersection") between the first
                  // pair of points and between the last pair of points.
                  //
-                 // To perform the cut, remove any points in our shape's points array that are between the two intersection points.
-                 // And, with some adjustment, incorporate the points of the cut into our shape, putting them in between the two intersection
-                 // points. By incorporating the points of the cut into our shape, we get a new shape that follows the outline of the cut.
+                 // Really, a given cut will the shape into two pieces, either of which could be our new shape. This method picks the option
+                 // that maximizes the new shape's perimeter.
+                 //
+                 // This is probably a reasonable guess at user intent in most cases - if they snip a little bit on the end, they probably
+                 // wanted to remove the small piece and not the rest of the shape. Maximizing perimeter will also result in bigger and probably
+                 // more visually interesting snowflakes.
 
-                 var distances, i, next, newPoints, newState;
+                 var distances, i, next, newPoints, newState, option1, option2;
 
-                 // find the intersections on both ends of the "cut"
+                 // Find the intersections on both ends of the "cut."
                  var cutLines = Flake.linesFromPoints(cuts),
                      intersections = [ cutLines[0], cutLines[cutLines.length - 1] ].map(function(seg) { return Flake.getIntersection(points, seg, close) });
 
@@ -175,30 +204,23 @@ Flake.makeFolded = function(x, y, height, angle) {
                      return;
                  }
 
-                 // We'll have to remove the parts of our shape that are between the two intersections, so figure out how many
-                 // elements of the points array we need to remove.
+                 // Figure out how many and which elements of the points array we need to cut out.
                  var spliceStart = Math.min(intersections[0].lineNumber, intersections[1].lineNumber) + 1,
                  spliceLength = Math.abs(intersections[0].lineNumber - intersections[1].lineNumber);
 
-                 // At first, part of the cut will extend outside of our shape. Remove that part of the cut, so that when we
-                 // add the cut's points, we aren't extending the shape but only cutting it.
+                 // We will want to add the points in the cut to our shape, so that the new shape follows the outline of the cut. But at first,
+                 // part of the cut will extend outside of our shape. If we add that part in, our cut will extend our shape, which isn't what we
+                 // want. So remove the parts of the cut that extend beyond the intersections.
                  cuts[0] = intersections[0].intersection;
                  cuts[cuts.length - 1] = intersections[1].intersection;
 
-                 // Make sure the cut flows in the right direction. Since the points in our shape have an order, we want the
-                 // beginning of the cut to be at an earlier point of the shape, and the end of the cut to be later.
-                 // So reverse the cut if this isn't already the case.
-                 // We know the cut is going the wrong direction if the line number of the first intersection is greater
-                 // than that of the second. If the two line numbers are equal, then check whether the first point of the cut
-                 // is closer to an earlier point of the shape. If not closer, reverse the order of the cut.
+                 // The points in our shape have an order, so if we're going to insert the cut's points we have to make
+                 // sure those points are in the right order as well. Normalize the order by making the cut's first intersection
+                 // happen at an "earlier" part of the shape (i.e., the part with a lower line number, or that's closer to
+                 // an earlier point in the shape's points array if the line numbers are equal).
                  if (intersections[1].lineNumber < intersections[0].lineNumber) {
                      cuts.reverse();
                  } else if (intersections[0].lineNumber === intersections[1].lineNumber) {
-                     next = intersections[0].lineNumber + 1;
-                     if (next >= points.length) {
-                         next = 0;
-                     }
-
                      distances = [
                             Flake.distance(cuts[0], points[intersections[0].lineNumber]),
                             Flake.distance(cuts[cuts.length - 1], points[intersections[0].lineNumber])
@@ -209,8 +231,16 @@ Flake.makeFolded = function(x, y, height, angle) {
                      }
                  }
 
-                 // Update the points array to reflect the cut
-                 Array.prototype.splice.apply(points, [spliceStart, spliceLength].concat(cuts));
+                 // Again, two shapes could result from the cut. One results from splicing out points from the shape.
+                 var option1 = points.slice();
+                 Array.prototype.splice.apply(option1, [spliceStart, spliceLength].concat(cuts));
+
+                 // And the other shape contains those points that we spliced out.
+                 cuts.reverse();
+                 var option2 = cuts.concat(points.slice(spliceStart, spliceStart + spliceLength));
+
+                 // Update the points array to the shape with the largest perimeter. This completes the cut.
+                 points = Flake.getPerimeter(option1) > Flake.getPerimeter(option2) ? option1 : option2;
 
                  // Store our current set of points, linking it to the previous "currentState"
                  newState = { prev: currentState, next: null, points: points.slice() };
@@ -541,7 +571,6 @@ Flake.startUI= function() {
         }
 
         redraw();
-        return;
     });
 };
 
