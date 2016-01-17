@@ -7,10 +7,18 @@ Flake.distance = function(point1, point2) {
     return Math.sqrt(Math.pow(point1.x - point2.x, 2) + Math.pow(point1.y - point2.y, 2));
 };
 
+// TODO: all these functions with "pts" and "close" parameters could probably be folded in as methods of
+// a single kind of object. Something that represents a series of points that may or may not be closed.
+// The "folded" and "cut" objects would also fall into this category and could inherit from a more
+// general type.
+//
+// Consider how to approach this.
+
 Flake.linesFromPoints = function(pts, close) {
-    // Convert a set of "points" into a series of line segments that have a handy intersection method.
+    // Convert an array of "points" into a series of line segments (of the sort created by Flake.makeSegment).
     //
-    // If "close" is true, assume the last point is connected to the first, so that we have a closed shape.
+    // If "close" is true, assume the final point in the "pts" array is connected to the first, so that we have
+    // a closed shape.
 
     var i, lines = [];
 
@@ -27,7 +35,10 @@ Flake.linesFromPoints = function(pts, close) {
 
 Flake.getIntersections = function(pts, segment, close) {
     // Given a line segment created by Flake.makeSegment, find all points where it intersects the exterior of the shape
-    // outlined by "pts." If "close" is true, assume the last point in pts is connected to the first, so that we have a closed shape.
+    // outlined by "pts."
+    //
+    // If "close" is true, assume the final point in the "pts" array is connected to the first, so that we have
+    // a closed shape.
     //
     // Returns an array of objects, each of which contains the attributes "lineNumber" and "intersection."
     //
@@ -47,7 +58,8 @@ Flake.getIntersections = function(pts, segment, close) {
 Flake.getIntersection = function(pts, segment, close) {
     // Given a line segment created by Flake.makeSegment, find one point where it intersects the exterior of our shape.
     //
-    // If "close" is true, assume the last point in pts is connected to the first, so that we have a closed shape.
+    // If "close" is true, assume the final point in the "pts" array is connected to the first, so that we have
+    // a closed shape.
 
     var result = Flake.getIntersections(pts, segment, close);
     if (result.length > 0) {
@@ -58,22 +70,23 @@ Flake.getIntersection = function(pts, segment, close) {
 Flake.getPerimeter = function(pts, close) {
     // Given a shape defined by points "pts", calculate the total distance between each point and its neighbors.
     //
-    // If "close" is true, assume the last point in pts is connected to the first, so that we have a closed shape.
+    // If "close" is true, assume the final point in the "pts" array is connected to the first, so that we have
+    // a closed shape.
     //
-    // This is the perimeter around a closed shape.
+    // When the shape is closed, this method returns the perimeter.
 
     return Flake.linesFromPoints(pts, close).
         map(function(line) {
             return line.getLength();
         }).
-        reduce (function(a, b) {
+        reduce(function(a, b) {
             return a + b;
         });
 };
 
 Flake.makeSegment = function(point1, point2) {
     // Return an object representing the line segment from point 1 to point 2
-    // "Points' are objects containing an x and y coordinate
+    // "Points" are objects containing an x and y coordinate
 
     // Store the line as coefficients of the equation ax + by = c.
     // Knowing those coefficients helps us calculate intersections.
@@ -113,7 +126,7 @@ Flake.makeSegment = function(point1, point2) {
         intersection: function(line) {
                           // Find the intersection of this line segment with the segment passed as "line".
                           // Returns null if they don't intersect.
-
+ 
                           var coeffs = line.getCoefficients(),
                             det = a * coeffs.b - coeffs.a * b,
                             result = null;
@@ -126,7 +139,7 @@ Flake.makeSegment = function(point1, point2) {
                               };
                               if (!this.inRange(result) || !line.inRange(result)) {
                                   // Even if we were able to calculate an intersection, the line segments may not
-                                  // "reach" each other.
+                                  // be long enough to "reach" each other.
                                   result = null;
                               }
                           }
@@ -154,7 +167,7 @@ Flake.makeFolded = function(x, y, height, angle) {
     // array of points, drawing a line from each point to the next. Then fill in the shape.
     //
     // At any given time, the folded shape can also be displayed in "unfolded" form, as if we had finished cutting
-    // unfolded it to see the snowflake we had made. This is done using the "displayUnfolded" method.
+    // and unfolded it to see the snowflake we had made. This is done using the "displayUnfolded" method.
 
     var base = 2 * (Math.tan(angle / 2) * height),
         points = [{ x: x - height / 2, y: y }, { x: x + height / 2, y: base * 0.5 + y }, { x: x + height / 2, y: -base * 0.5 + y}],
@@ -231,7 +244,7 @@ Flake.makeFolded = function(x, y, height, angle) {
                      }
                  }
 
-                 // Again, two shapes could result from the cut. One results from splicing out points from the shape.
+                 // Again, two shapes could result from the cut. We get one by splicing out points from the shape.
                  var option1 = points.slice();
                  Array.prototype.splice.apply(option1, [spliceStart, spliceLength].concat(cuts));
 
@@ -240,7 +253,7 @@ Flake.makeFolded = function(x, y, height, angle) {
                  var option2 = cuts.concat(points.slice(spliceStart, spliceStart + spliceLength));
 
                  // Update the points array to the shape with the largest perimeter. This completes the cut.
-                 points = Flake.getPerimeter(option1) > Flake.getPerimeter(option2) ? option1 : option2;
+                 points = Flake.getPerimeter(option1, true) > Flake.getPerimeter(option2, true) ? option1 : option2;
 
                  // Store our current set of points, linking it to the previous "currentState"
                  newState = { prev: currentState, next: null, points: points.slice() };
@@ -447,40 +460,37 @@ Flake.newCut = function() {
         validate: function(pt) {
                       // True if extending the cut to this point would yield a valid cut. False if not.
                       //
-                      // Extending the cut to a point is valid iff the extension wouldn't cause the cut
-                      // to cross itself.
+                      // Extending the cut to a point is valid iff it wouldn't cause the cut to cross itself.
 
                       var numLines = Flake.linesFromPoints(points, false).length;
 
-                      if (numLines <= 1) {
+                      if (numLines < 1) {
+                          // No way to intersect ourselves yet
                           return true;
                       }
 
                       var extension = Flake.makeSegment(points[points.length - 1], pt);
-                      var intersections = Flake.getIntersections(points, extension, false);
 
-                      return intersections.every(function(intersection) {
-                          // The extension will probably intersect the existing cut
-                          // at one point - the end of the existing cut, i.e., the segment
-                          // that is currently the final line. Make sure the extension ONLY intersects
-                          // there.
-                          return intersection.lineNumber === numLines - 1;
-                      });
+                      // The extension will intersect the existing cut at one point - the
+                      // end of the existing cut, i.e., the segment that we're extending from.
+                      // Make sure the extension ONLY intersects there.
+                      return Flake.getIntersections(points, extension, false).length === 1;
                   }
     };
 };
 
 Flake.startUI= function() {
-    var bgColor = '#061d2b',
+    var bgColor = '#00436a',
         flakeColor = '#ffffff';
 
-    var cutLineColor = '#ff0000',
-        cutPointColor = '#00ff00';
+    var cutLineColor = '#0ea5ff',
+        cutPointColor = '#0ea5ff';
 
     var canvas = document.getElementById('folded'),
         unfoldCanvas = document.getElementById('unfolded'),
-        undoButton = document.getElementById('undo'),
-        redoButton = document.getElementById('redo');
+        redoButton = document.getElementById('redo'),
+        swapButton = document.getElementById('swap'),
+        undoButton = document.getElementById('undo');
 
     var ctx = canvas.getContext('2d'),
         unfoldCtx = unfoldCanvas.getContext('2d');
@@ -489,14 +499,17 @@ Flake.startUI= function() {
         cut = Flake.newCut();
 
     // Scale the unfold canvas - it should have enough space to contain the folded flake, oriented any direction, twice (since the unfolded
-    // snowflake will have a max width twice the folded snowflake's height), and add about 10% so it has some space on either side.
+    // snowflake will have a max width twice the folded snowflake's height). Add about 10% so it has some space on either side.
     var scaleFactor = Math.min(unfoldCanvas.width, unfoldCanvas.height) / Math.max(folded.getDimensions().x, folded.getDimensions().y) / 2 / 1.1;
     unfoldCtx.scale(scaleFactor, scaleFactor);
 
     // calculate the center of the new scaled canvas so we can center the snowflake there
     var unfoldCtr = { x: unfoldCanvas.width / 2 / scaleFactor, y: unfoldCanvas.height / 2 / scaleFactor };
 
-    var fudgeStrokeWidth = 2 / scaleFactor;
+    // We can add a stroke around our unfolded snowflake - this keeps a visible "seam" from appearing between the different
+    // sections. Too narrow and it won't fill in the seams. Too wide and it'll be obvious and mess up the shape. Make it
+    // a pixel wide after scaling.
+    var fudgeStrokeWidth =  1 / scaleFactor;
 
     function redraw() {
         ctx.fillStyle = bgColor;
@@ -506,7 +519,6 @@ Flake.startUI= function() {
         unfoldCtx.fillStyle = bgColor;
         unfoldCtx.fillRect(-unfoldCanvas.width / scaleFactor, -unfoldCanvas.height / scaleFactor, unfoldCanvas.width / scaleFactor * 2, unfoldCanvas.height / scaleFactor * 2);
 
-        // fudgeStrokeWidth makes sure the stroke around the snowflake is about 2 pixels wide when drawn on our scaled canvas
         folded.displayUnfolded(unfoldCtr.x, unfoldCtr.y, unfoldCtx, flakeColor, fudgeStrokeWidth);
 
         cut.display(ctx, cutPointColor, cutLineColor);
@@ -517,17 +529,17 @@ Flake.startUI= function() {
         return ctx.isPointInPath(pt.x, pt.y);
     }
 
+    redoButton.onclick = function() {
+        folded.redo();
+        redraw();
+    };
+
     undoButton.onclick = function() {
         if (cut.isStarted()) {
             cut = Flake.newCut();
         } else {
             folded.undo();
         }
-        redraw();
-    };
-
-    redoButton.onclick = function() {
-        folded.redo();
         redraw();
     };
 
