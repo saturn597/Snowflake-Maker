@@ -126,7 +126,7 @@ Flake.makeSegment = function(point1, point2) {
         intersection: function(line) {
                           // Find the intersection of this line segment with the segment passed as "line".
                           // Returns null if they don't intersect.
- 
+
                           var coeffs = line.getCoefficients(),
                             det = a * coeffs.b - coeffs.a * b,
                             result = null;
@@ -260,6 +260,20 @@ Flake.makeFolded = function(x, y, height, angle) {
                  currentState.next = newState;
                  currentState = newState;
              },
+
+        countCuts: function() {
+                       // Returns the number of times this folded has been cut.
+
+                       var helper = function (count, state) {
+                           if (state.prev) {
+                               return helper(count + 1, state.prev);
+                           }
+
+                           return count;
+                       };
+
+                       return helper(0, currentState);
+                   },
 
         display: function(ctx, style) {
                      // Display this shape in the given graphics context, in the given style
@@ -437,7 +451,7 @@ Flake.newCut = function() {
                      ctx.moveTo(points[0].x, points[0].y);
 
                      for (i = 0; i < points.length; i++) {
-                         ctx.fillRect(points[i].x - 1, points[i].y - 1, 2, 2);
+                         ctx.fillRect(points[i].x - 1, points[i].y - 1, 4, 4);
                          ctx.lineTo(points[i].x, points[i].y);
                      }
 
@@ -479,6 +493,53 @@ Flake.newCut = function() {
     };
 };
 
+Flake.prepUnfoldCanvas = function(unfoldCanvas, folded) {
+    // Prepare a given canvas to display the folded. Returns an object with a "display" method. That method displays the unfolded version
+    // of the snowflake that we were passed, placing it in the center of the canvas.
+
+    var unfoldCtx = unfoldCanvas.getContext('2d');
+
+    // Scale the unfold canvas - it should have enough space to contain the folded flake twice, oriented any direction, twice (since the unfolded
+    // snowflake will have a max width twice the folded snowflake's height). Add about 10% so it has some space on either side.
+    var unfoldScale = Math.min(unfoldCanvas.width, unfoldCanvas.height) / Math.max(folded.getDimensions().x, folded.getDimensions().y) / 2 / 1.1;
+    unfoldCtx.scale(unfoldScale, unfoldScale);
+
+    // calculate the center of the new scaled canvas so we can center the snowflake there
+    var unfoldCtr = { x: unfoldCanvas.width / 2 / unfoldScale, y: unfoldCanvas.height / 2 / unfoldScale };
+
+    // We can add a stroke around our unfolded snowflake - this keeps a visible "seam" from appearing between the different
+    // sections. Too narrow and it won't fill in the seams. Too wide and it'll be obvious and mess up the shape. Make it
+    // a pixel wide after scaling.
+    var fudgeStrokeWidth =  1 / unfoldScale;
+
+    // Store the upper left x and y of the scaled canvas, and its scaled width and height
+    var canvasRect = {
+        x: -unfoldCanvas.width / unfoldScale,
+        y: -unfoldCanvas.height / unfoldScale,
+        width: unfoldCanvas.width / unfoldScale * 2,
+        height: unfoldCanvas.height / unfoldScale * 2
+    };
+
+    var displayer = {};
+
+    displayer.display = function(bgColor, unfoldColor) {
+
+        // Both "clear" and "fill" the canvas in case the bgColor we're passed has opacity < 1
+        unfoldCtx.clearRect(canvasRect.x, canvasRect.y, canvasRect.width, canvasRect.height);
+
+        unfoldCtx.fillStyle = bgColor;
+        unfoldCtx.fillRect(canvasRect.x, canvasRect.y, canvasRect.width, canvasRect.height);
+
+        folded.displayUnfolded(unfoldCtr.x, unfoldCtr.y, unfoldCtx, unfoldColor, fudgeStrokeWidth);
+    };
+
+    displayer.updateFolded = function(newFolded) {
+        folded = newFolded;
+    };
+
+    return displayer;
+};
+
 Flake.startUI= function() {
     var bgColor = '#00436a',
         flakeColor = '#ffffff';
@@ -486,53 +547,120 @@ Flake.startUI= function() {
     var cutLineColor = '#0ea5ff',
         cutPointColor = '#0ea5ff';
 
-    var canvas = document.getElementById('folded'),
+    // messages to walk user through 1st cut
+    var firstMessages = [
+        'Start cutting by clicking the dark blue area outside the white triangle.',
+        'Now click inside the triangle.',
+        'Click somewhere else in the triangle.',
+        'Click the dark blue area outside the triangle to complete the cut!'
+            ];
+
+    // messages shown on subsequent cuts
+    var moreMessages = [
+        'Looking good - try cutting again!',
+        'Looks great! Keep going!',
+        'Click "Admire" at any time to see your flake up close.',
+        ];
+
+    var error = null;
+
+    var foldCanvas = document.getElementById('folded'),
         unfoldCanvas = document.getElementById('unfolded'),
+        admireCanvas = document.querySelector('#admire-div canvas'),
+        admireButton = document.getElementById('admire'),
+        backButton = document.getElementById('back'),
         redoButton = document.getElementById('redo'),
-        swapButton = document.getElementById('swap'),
+        resetButton = document.getElementById('reset');
         undoButton = document.getElementById('undo');
 
-    var ctx = canvas.getContext('2d'),
+    var admireImage = document.querySelector('#admire-div img');
+    var admireDiv = document.getElementById('admire-div');
+
+    var messages = document.getElementById('messages');
+
+    var admireCtx = admireCanvas.getContext('2d'),
+        foldedCtx = foldCanvas.getContext('2d'),
         unfoldCtx = unfoldCanvas.getContext('2d');
 
-    var folded = Flake.makeFolded(canvas.width / 2, canvas.height / 2, canvas.width * 0.9, 2 * Math.PI / 12),
+    var folded = Flake.makeFolded(foldCanvas.width / 2, foldCanvas.height / 2, foldCanvas.width * 0.9, 2 * Math.PI / 12),
         cut = Flake.newCut();
 
-    // Scale the unfold canvas - it should have enough space to contain the folded flake, oriented any direction, twice (since the unfolded
-    // snowflake will have a max width twice the folded snowflake's height). Add about 10% so it has some space on either side.
-    var scaleFactor = Math.min(unfoldCanvas.width, unfoldCanvas.height) / Math.max(folded.getDimensions().x, folded.getDimensions().y) / 2 / 1.1;
-    unfoldCtx.scale(scaleFactor, scaleFactor);
+    var unfoldedDisplay = Flake.prepUnfoldCanvas(unfoldCanvas, folded);
+    var admireDisplay = Flake.prepUnfoldCanvas(admireCanvas, folded);
 
-    // calculate the center of the new scaled canvas so we can center the snowflake there
-    var unfoldCtr = { x: unfoldCanvas.width / 2 / scaleFactor, y: unfoldCanvas.height / 2 / scaleFactor };
+    function updateMessage() {
+        // Update the "message" shown to the user.
+        // The message varies depending on whether they're "admiring" their flake or cutting it or if there was some error.
+        // If they're admiring it, show them a message explaining how to save, or tell them to cut more.
+        // If they're cutting it, then show them detailed messages for their first cut, then less on subsequent cuts.
+        // If there was an error, show the error.
 
-    // We can add a stroke around our unfolded snowflake - this keeps a visible "seam" from appearing between the different
-    // sections. Too narrow and it won't fill in the seams. Too wide and it'll be obvious and mess up the shape. Make it
-    // a pixel wide after scaling.
-    var fudgeStrokeWidth =  1 / scaleFactor;
+        var admiring = admireDiv.style.display === 'block';
+
+        if (admiring) {
+            if (folded.countCuts()) {
+                messages.innerHTML = 'Awesome! Right-click the snowflake and select "Save" or drag it to your desktop to save!';
+            } else {
+                messages.innerHTML = 'You haven\'t cut anything yet! Click "Back" and try cutting your snowflake.';
+            }
+        } else if (!error) {
+            if (!folded.countCuts()) {
+                messages.innerHTML = firstMessages[cut.getLength()] || firstMessages[firstMessages.length - 11];
+            } else {
+                messages.innerHTML = moreMessages[folded.countCuts() - 1] || moreMessages[moreMessages.length - 1];
+            }
+        } else {
+            messages.innerHTML = error;
+            error = null;
+        }
+    }
 
     function redraw() {
-        ctx.fillStyle = bgColor;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        folded.display(ctx, flakeColor);
+        updateMessage();
+        foldedCtx.fillStyle = bgColor;
+        foldedCtx.fillRect(0, 0, foldCanvas.width, foldCanvas.height);
+        folded.display(foldedCtx, flakeColor);
 
-        unfoldCtx.fillStyle = bgColor;
-        unfoldCtx.fillRect(-unfoldCanvas.width / scaleFactor, -unfoldCanvas.height / scaleFactor, unfoldCanvas.width / scaleFactor * 2, unfoldCanvas.height / scaleFactor * 2);
+        unfoldedDisplay.display(bgColor, flakeColor);
 
-        folded.displayUnfolded(unfoldCtr.x, unfoldCtr.y, unfoldCtx, flakeColor, fudgeStrokeWidth);
-
-        cut.display(ctx, cutPointColor, cutLineColor);
+        cut.display(foldedCtx, cutPointColor, cutLineColor);
     }
 
     function foldedContains(pt) {
-        folded.prepareStroke(ctx);
-        return ctx.isPointInPath(pt.x, pt.y);
+        folded.prepareStroke(foldedCtx);
+        return foldedCtx.isPointInPath(pt.x, pt.y);
     }
+
+    admireButton.onclick = function() {
+        admireDisplay.display(bgColor, flakeColor);
+        // convert canvas to image for easy saving
+        admireImage.src = admireCanvas.toDataURL("img/png");
+
+        main.style.display = 'none';
+        admireDiv.style.display = 'block';
+
+        updateMessage();
+    };
+
+    backButton.onclick = function() {
+        admireDiv.style.display = 'none';
+        main.style.display = 'block';
+
+        updateMessage();
+    };
 
     redoButton.onclick = function() {
         folded.redo();
         redraw();
     };
+
+    resetButton.onclick = function() {
+        folded = Flake.makeFolded(foldCanvas.width / 2, foldCanvas.height / 2, foldCanvas.width * 0.9, 2 * Math.PI / 12);
+        admireDisplay.updateFolded(folded);
+        unfoldedDisplay.updateFolded(folded);
+        cut = Flake.newCut();
+        redraw();
+    }
 
     undoButton.onclick = function() {
         if (cut.isStarted()) {
@@ -545,7 +673,7 @@ Flake.startUI= function() {
 
     redraw();
 
-    canvas.addEventListener('mousedown', function(e) {
+    foldCanvas.addEventListener('mousedown', function(e) {
         var numInt;
         var point = { x: 0, y: 0 };
         do {
@@ -554,6 +682,8 @@ Flake.startUI= function() {
         } while (e = e.offsetParent);
 
         if (!cut.validate(point)) {
+            error = 'Cuts can\'t cross themselves, sorry!';
+            redraw();
             return;
         }
 
@@ -579,6 +709,7 @@ Flake.startUI= function() {
                 // Adding this point to the cut made it both pass out AND back in.
                 // To keep the cutting algorithm sane, disallow this.
                 cut.pop();
+                error = 'Cuts can\'t cross edges, sorry!';
             }
         }
 

@@ -8,25 +8,26 @@ html {
 body {
     background: #0ea5ff;
     color: #fff;
-    margin: 0;
+    margin: 0 auto;
     padding: 0;
+    position: relative;
+    text-align: center;
+    width: 732px;
 }
 
-#wrap {
+#main {
     margin: 0 auto;
+    position: relative;
     width: 732px;
 }
 
 h1 {
     background: #00436a;
-    border-color: #78cdff;
-    border-width: 5px;
-    border-style: solid;
+    border: 5px solid #78cdff;
     border-radius: 15px;
     font-family: "Brush Script MT","Myriad Set Pro",Helvetica Neue,Helvetica,Arial,sans-serif;
     font-size: 4em;
     margin: 0 0 0 0;
-    text-align: center;
 }
 
 .wrapper {
@@ -36,19 +37,32 @@ h1 {
 }
 
 #unfolded-wrapper {
+    border: 10px solid #78cdff;
     float: right;
-    height: 100px;
     margin: 5px 0;
-    padding: 10px;
+
+    height: 100px;
     width: 100px;
 }
 
 #folded-wrapper {
+    border: 15px solid #78cdff;
     clear: both;
-    height: 500px;
     margin: 0 auto;
-    padding: 15px;
+
+    height: 400px;
     width: 700px;
+}
+
+.controls {
+    margin-top: 72px;
+    margin-left: 20px;
+    text-align: left;
+}
+
+.controls2 {
+    margin: 3px 20px;
+    text-align: left;
 }
 
 button {
@@ -59,7 +73,7 @@ button {
     border-radius: 42px;
     border-width: 1px;
     color: #ffffff;
-    font-family: "Myriad Set Pro",Helvetica Neue,Helvetica,Arial,sans-serif;
+    font-family: "Myriad Set Pro","Helvetica Neue",Helvetica,Arial,sans-serif;
     font-size: 17px;
     padding: 10px 30px 10px 29px;
     margin-top: 5px;
@@ -74,8 +88,57 @@ button:active {
     background: #78cdff;
 }
 
-#controls {
-    margin-top: 80px;
-    margin-left: 20px;
-    position: relative;
+#admire {
+    float: left;
+    font-size: 20px;
+    font-weight: bold;
+}
+
+#reset {
+    float: right;
+}
+
+#admire-div {
+    display: none;
+    margin: 0 auto;
+
+    text-align: center;
+}
+
+#admire-div .controls {
+    margin: 10px 0;
+    text-align: center;
+}
+
+#admire-div .wrapper {
+    border: 15px solid #78cdff;
+    margin: 0 auto;
+
+    height: 700px;
+    width: 700px;
+}
+
+#admire-div canvas {
+    display: none;
+}
+
+#messages {
+    background: #b0b6ff;
+    border: 1px solid #000874;
+    border-radius: 10px;
+    color: #a70400;
+
+    display: inline-block;
+    font-size: 20px;
+    font-family: "Myriad Set Pro","Helvetica Neue",Helvetica,Arial,sans-serif;
+    line-height: 1.5em;
+    margin: 10px auto;
+    padding: 5px 10px;
+}
+
+hr {
+    border-bottom: 1px dashed #00436a;
+    border-top: 1px dashed #ffffff;
+    margin: 15px auto;
+    width: 500px;
 }
