@@ -564,28 +564,29 @@ Flake.startUI= function() {
 
     var error = null;
 
-    var foldCanvas = document.getElementById('folded'),
-        unfoldCanvas = document.getElementById('unfolded'),
-        admireCanvas = document.querySelector('#admire-div canvas'),
+    var maker = document.getElementById('maker'),
+        foldCanvas = document.querySelector('#folded canvas'),
+        previewCanvas = document.querySelector('#preview canvas'),
+        admireCanvas = document.querySelector('#admirer canvas'),
         admireButton = document.getElementById('admire'),
         backButton = document.getElementById('back'),
         redoButton = document.getElementById('redo'),
         resetButton = document.getElementById('reset');
         undoButton = document.getElementById('undo');
 
-    var admireImage = document.querySelector('#admire-div img');
-    var admireDiv = document.getElementById('admire-div');
+    var admireImage = document.querySelector('#admirer img');
+    var admireDiv = document.getElementById('admirer');
 
     var messages = document.getElementById('messages');
 
     var admireCtx = admireCanvas.getContext('2d'),
         foldedCtx = foldCanvas.getContext('2d'),
-        unfoldCtx = unfoldCanvas.getContext('2d');
+        previewCtx = previewCanvas.getContext('2d');
 
     var folded = Flake.makeFolded(foldCanvas.width / 2, foldCanvas.height / 2, foldCanvas.width * 0.9, 2 * Math.PI / 12),
         cut = Flake.newCut();
 
-    var unfoldedDisplay = Flake.prepUnfoldCanvas(unfoldCanvas, folded);
+    var previewDisplay = Flake.prepUnfoldCanvas(previewCanvas, folded);
     var admireDisplay = Flake.prepUnfoldCanvas(admireCanvas, folded);
 
     function updateMessage() {
@@ -621,7 +622,7 @@ Flake.startUI= function() {
         foldedCtx.fillRect(0, 0, foldCanvas.width, foldCanvas.height);
         folded.display(foldedCtx, flakeColor);
 
-        unfoldedDisplay.display(bgColor, flakeColor);
+        previewDisplay.display(bgColor, flakeColor);
 
         cut.display(foldedCtx, cutPointColor, cutLineColor);
     }
@@ -636,7 +637,7 @@ Flake.startUI= function() {
         // convert canvas to image for easy saving
         admireImage.src = admireCanvas.toDataURL("img/png");
 
-        main.style.display = 'none';
+        maker.style.display = 'none';
         admireDiv.style.display = 'block';
 
         updateMessage();
@@ -644,7 +645,7 @@ Flake.startUI= function() {
 
     backButton.onclick = function() {
         admireDiv.style.display = 'none';
-        main.style.display = 'block';
+        maker.style.display = 'block';
 
         updateMessage();
     };
@@ -657,7 +658,7 @@ Flake.startUI= function() {
     resetButton.onclick = function() {
         folded = Flake.makeFolded(foldCanvas.width / 2, foldCanvas.height / 2, foldCanvas.width * 0.9, 2 * Math.PI / 12);
         admireDisplay.updateFolded(folded);
-        unfoldedDisplay.updateFolded(folded);
+        previewDisplay.updateFolded(folded);
         cut = Flake.newCut();
         redraw();
     }

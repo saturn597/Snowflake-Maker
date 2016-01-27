@@ -15,12 +15,6 @@ body {
     width: 732px;
 }
 
-#main {
-    margin: 0 auto;
-    position: relative;
-    width: 732px;
-}
-
 h1 {
     background: #00436a;
     border: 5px solid #78cdff;
@@ -36,7 +30,7 @@ h1 {
     display: block;
 }
 
-#unfolded-wrapper {
+#preview {
     border: 10px solid #78cdff;
     float: right;
     margin: 5px 0;
@@ -45,7 +39,7 @@ h1 {
     width: 100px;
 }
 
-#folded-wrapper {
+#folded {
     border: 15px solid #78cdff;
     clear: both;
     margin: 0 auto;
@@ -98,19 +92,19 @@ button:active {
     float: right;
 }
 
-#admire-div {
+#admirer {
     display: none;
     margin: 0 auto;
 
     text-align: center;
 }
 
-#admire-div .controls {
+#admirer .controls {
     margin: 10px 0;
     text-align: center;
 }
 
-#admire-div .wrapper {
+#admirer .wrapper {
     border: 15px solid #78cdff;
     margin: 0 auto;
 
@@ -118,7 +112,7 @@ button:active {
     width: 700px;
 }
 
-#admire-div canvas {
+#admirer canvas {
     display: none;
 }
 
