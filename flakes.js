@@ -606,7 +606,7 @@ Flake.startUI= function() {
             }
         } else if (!error) {
             if (!folded.countCuts()) {
-                messages.innerHTML = firstMessages[cut.getLength()] || firstMessages[firstMessages.length - 11];
+                messages.innerHTML = firstMessages[cut.getLength()] || firstMessages[firstMessages.length - 1];
             } else {
                 messages.innerHTML = moreMessages[folded.countCuts() - 1] || moreMessages[moreMessages.length - 1];
             }
