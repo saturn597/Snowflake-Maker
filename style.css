@@ -117,17 +117,13 @@ button:active {
 }
 
 #messages {
-    background: #b0b6ff;
-    border: 1px solid #000874;
-    border-radius: 10px;
-    color: #a70400;
+    color: #000874;
 
     display: inline-block;
-    font-size: 20px;
     font-family: "Myriad Set Pro","Helvetica Neue",Helvetica,Arial,sans-serif;
+    font-size: 20px;
     line-height: 1.5em;
     margin: 10px auto;
-    padding: 5px 10px;
 }
 
 hr {
